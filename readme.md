@@ -10,3 +10,6 @@ ireport高版本会自动在元素中加入uuid这个属性，使得jrxml文件�
   
 ## xlsx_review_form_for_deal  
 通过采购合同Excel，自动将相关信息填入对应表格模板，生成缺少的评审表
+
+## delete_dota2_replays 
+删除DOTA2录像目录下的所有录像文件，环境为macos，Steam
