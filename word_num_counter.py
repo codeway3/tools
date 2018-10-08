@@ -16,12 +16,14 @@ import re
 import string
 import pickle
 import docx
+from docx import Document
 from docopt import docopt
 from openpyxl import Workbook
 
 SOURCEPATH = './tmp/招股说明书/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
 FINPATH = './tmp/result.xlsx'  # Excel生成位置
+GENPATH = './tmp/风险段落/'  # Word生成位置
 
 # 匹配用的模式串
 pattern1_1_in = re.compile(r'^重大事项提示(\s*)$')
@@ -118,9 +120,10 @@ def generate_xlsx(findir, src_dict):
     rows = list()
     failed_rows = list()
     for dt in src_dict:
+        file_name = dt['name']
         row = list()
-        row.append(dt['name'])
-        print(dt['name'])
+        row.append(file_name)
+        print(file_name)
 
         all_num = word_count(dt['text'])
         row.append(all_num)
@@ -130,6 +133,9 @@ def generate_xlsx(findir, src_dict):
         flag1 = False
         flag3 = False
         flag = [False, False, False]
+
+        document = Document()
+        paras_to_word = list()
         for para_text in dt['text']:
             para_text = ''.join(para_text.split())
             if re.match(pattern1_1_out, para_text) and flag1:
@@ -152,10 +158,13 @@ def generate_xlsx(findir, src_dict):
 
             if flag[0]:
                 warning_num[0] += word_count(para_text)
+                paras_to_word.append(para_text)
             elif flag[1]:
                 warning_num[1] += word_count(para_text)
+                paras_to_word.append(para_text)
             elif flag[2]:
                 warning_num[2] += word_count(para_text)
+                paras_to_word.append(para_text)
 
             if flag[0] or flag[1] or flag[2]:
                 sumnum += word_count(para_text)
@@ -182,6 +191,10 @@ def generate_xlsx(findir, src_dict):
             failed_rows.append(row)
         else:
             rows.append(row)
+            for para in paras_to_word:
+                if para:
+                    document.add_paragraph(para)
+            document.save(GENPATH+file_name)
         print()
     for row in rows:
         sheet.append(row)
