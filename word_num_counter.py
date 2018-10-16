@@ -28,6 +28,7 @@ SOURCEPATH = './tmp/招股说明书/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
 FINPATH = './tmp/result.xlsx'  # Excel生成位置
 GENPATH = './tmp/风险段落/'  # Word生成位置
+GENPATH_CNT = './tmp/词频统计/'  # 词频统计Excel生成位置
 STOPWORDS = './tmp/stopword.txt'  # 停用词
 
 dict1 = './tmp/财经金融词汇大全.txt'
@@ -141,14 +142,10 @@ def cnt_fre(dat):
 
 # 进行字数统计，并输出到表格中
 def generate_xlsx(findir, src_dict):
-    data = [[], [], []]
-    wb = Workbook()
-    sheet = wb.active
-    sheet.title = '主要风险段落字数统计'
-    sheet.append(['文档名字', '总字数', '重大事项提示-风险', '风险因素', '管理层讨论与分析-未来盈利能力', '风险段落总字数'])
     rows = list()
     failed_rows = list()
     for dt in src_dict:
+        data = [[], [], []]
         file_name = dt['name']
         row = list()
         row.append(file_name)
@@ -226,31 +223,44 @@ def generate_xlsx(findir, src_dict):
         if sumnum/all_num > 0.8 or warning_num[1] == 0 or warning_num[2] == 0:
             failed_rows.append(row)
         else:
+            # 生成.docx
             rows.append(row)
             for para in paras_to_word:
                 if para:
                     document.add_paragraph(para)
             document.save(GENPATH+file_name)
+            # 生成.xlsx
+            tmp_wb = Workbook()
+            xlsx_name = file_name.replace('.docx', '.xlsx')
+            no = 1
+            for dat in data:
+                cnt_ans = cnt_fre(dat)
+                sheetname = '风险段落词频统计' + str(no)  # 需要改表名时改这里
+                tmp_wb.create_sheet(sheetname)
+                sheet = tmp_wb[sheetname]
+                # 需要加表头在这里加 例如 sheet.append(['单词', '计数'])
+                for ind in cnt_ans.index:
+                    sheet.append((ind, cnt_ans[ind]))
+                no += 1
+            cnt_ans = cnt_fre(paras_to_word)
+            sheet = tmp_wb.active
+            sheet.title = '主要风险段落词数统计'
+            # 需要加表头在这里加 例如 sheet.append(['单词', '计数'])
+            for ind in cnt_ans.index:
+                sheet.append((ind, cnt_ans[ind]))
+            tmp_wb.save(GENPATH_CNT+xlsx_name)
         print()
 
+    wb = Workbook()
+    sheet = wb.active
+    sheet.title = '主要风险段落字数统计'
+    sheet.append(['文档名字', '总字数', '重大事项提示-风险', '风险因素', '管理层讨论与分析-未来盈利能力', '风险段落总字数'])
     for row in rows:
         sheet.append(row)
     wb.create_sheet('处理失败文档', index=1)
     sheet2 = wb['处理失败文档']
     for row in failed_rows:
         sheet2.append(row)
-
-    no = 0
-    for dat in data:
-        cnt_ans = cnt_fre(dat)
-        sheetname = '风险段落词频统计' + str(no)  # 需要改表名时改这里
-        wb.create_sheet(sheetname)
-        sheet = wb[sheetname]
-        # 需要加表头在这里加 例如 sheet.append(['单词', '计数'])
-        for ind in cnt_ans.index:
-            sheet.append((ind, cnt_ans[ind]))
-        no += 1
-
     wb.save(findir)
 
 
