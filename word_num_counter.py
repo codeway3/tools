@@ -26,9 +26,9 @@ import pandas as pd
 
 SOURCEPATH = './tmp/招股说明书/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
-FINPATH = './tmp/result.xlsx'  # Excel生成位置
+FINPATH = './tmp/风险段落字数统计.xlsx'  # 字数Excel生成位置
+SIPPATH = './tmp/风险段落词数统计.xlsx'  # 词数Excel生成位置
 GENPATH = './tmp/风险段落/'  # Word生成位置
-GENPATH_CNT = './tmp/词频统计/'  # 词频统计Excel生成位置
 STOPWORDS = './tmp/stopword.txt'  # 停用词
 
 dict1 = './tmp/财经金融词汇大全.txt'
@@ -123,8 +123,8 @@ def deserialize_dict(dir):
     return tmp_dict
 
 
-#  处理分词词频统计
-def cnt_fre(dat):
+#  处理分词词数统计
+def words_count(dat):
     df_list = []
     ans = pd.DataFrame([], columns=['word'])
     ana.set_stop_words(STOPWORDS)
@@ -132,29 +132,31 @@ def cnt_fre(dat):
         wordlist = ana.extract_tags(para, topK=200)
         df = pd.DataFrame(wordlist, columns=['word'])
         df_list.append(df)
-        # print(df)
     ans = pd.concat(df_list)
-    # print(ans)
-    result = ans.groupby('word').size().sort_values(ascending=False)
+    result = ans.shape[0]
     return result
     # 需要控制输出行数时 改这里 改成 return result.head(xx) xx为需要保留的行数
 
 
 # 进行字数统计，并输出到表格中
-def generate_xlsx(findir, src_dict):
+def generate_xlsx(src_dict):
     rows = list()
+    crows = list()
     failed_rows = list()
     for dt in src_dict:
-        data = [[], [], []]
         file_name = dt['name']
         row = list()
+        crow = list()
         row.append(file_name)
+        crow.append(file_name)
         print(file_name)
 
         all_num = word_count(dt['text'])
         row.append(all_num)
+        crow.append(words_count(dt['text']))
 
         warning_num = [0, 0, 0]
+        words_num = [0, 0, 0]
         sumnum = 0
         flag1 = False
         flag3 = False
@@ -184,20 +186,20 @@ def generate_xlsx(findir, src_dict):
 
             if flag[0]:
                 warning_num[0] += word_count(para_text)
+                words_num[0] += words_count([para_text])
                 paras_to_word.append(para_text)
-                data[0].append(para_text)
             elif flag[1]:
                 warning_num[1] += word_count(para_text)
+                words_num[1] += words_count([para_text])
                 paras_to_word.append(para_text)
-                data[1].append(para_text)
             elif flag[2]:
                 warning_num[2] += word_count(para_text)
+                words_num[2] += words_count([para_text])
                 paras_to_word.append(para_text)
-                data[2].append(para_text)
             elif flag1 and re.match(pattern1_sp, para_text):
                 warning_num[0] += word_count(para_text)
+                words_num[0] += words_count([para_text])
                 paras_to_word.append(para_text)
-                data[0].append(para_text)
 
             if flag[0] or flag[1] or flag[2] or (flag1 and re.match(pattern1_sp, para_text)):
                 sumnum += word_count(para_text)
@@ -220,35 +222,18 @@ def generate_xlsx(findir, src_dict):
                 print(para_text)
         row.extend(warning_num)
         row.append(sum(warning_num))
+        crow.extend(words_num)
+        crow.append(sum(words_num))
         if sumnum/all_num > 0.8 or warning_num[1] == 0 or warning_num[2] == 0:
             failed_rows.append(row)
         else:
-            # 生成.docx
             rows.append(row)
+            crows.append(crow)
+            # 生成.docx
             for para in paras_to_word:
                 if para:
                     document.add_paragraph(para)
             document.save(GENPATH+file_name)
-            # 生成.xlsx
-            tmp_wb = Workbook()
-            xlsx_name = file_name.replace('.docx', '.xlsx')
-            no = 1
-            for dat in data:
-                cnt_ans = cnt_fre(dat)
-                sheetname = '风险段落词频统计' + str(no)  # 需要改表名时改这里
-                tmp_wb.create_sheet(sheetname)
-                sheet = tmp_wb[sheetname]
-                # 需要加表头在这里加 例如 sheet.append(['单词', '计数'])
-                for ind in cnt_ans.index:
-                    sheet.append((ind, cnt_ans[ind]))
-                no += 1
-            cnt_ans = cnt_fre(paras_to_word)
-            sheet = tmp_wb.active
-            sheet.title = '主要风险段落词数统计'
-            # 需要加表头在这里加 例如 sheet.append(['单词', '计数'])
-            for ind in cnt_ans.index:
-                sheet.append((ind, cnt_ans[ind]))
-            tmp_wb.save(GENPATH_CNT+xlsx_name)
         print()
 
     wb = Workbook()
@@ -261,7 +246,15 @@ def generate_xlsx(findir, src_dict):
     sheet2 = wb['处理失败文档']
     for row in failed_rows:
         sheet2.append(row)
-    wb.save(findir)
+    wb.save(FINPATH)
+
+    wb = Workbook()
+    sheet = wb.active
+    sheet.title = '主要风险段落词数统计'
+    sheet.append(['文档名字', '总词数', '重大事项提示-风险', '风险因素', '管理层讨论与分析-未来盈利能力', '风险段落总词数'])
+    for crow in crows:
+        sheet.append(crow)
+    wb.save(SIPPATH)
 
 
 if __name__ == '__main__':
@@ -270,5 +263,5 @@ if __name__ == '__main__':
         fd = deserialize_dict(MIDDLEPATH)
     else:
         fd = transfer_word(SOURCEPATH, MIDDLEPATH)
-    generate_xlsx(FINPATH, fd)
+    generate_xlsx(fd)
     print('处理完成')
