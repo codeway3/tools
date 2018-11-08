@@ -27,7 +27,7 @@ import jieba.analyse as ana
 import pandas as pd
 
 
-SOURCEPATH = './tmp/招股说明书130/'  # 文档目录
+SOURCEPATH = './tmp/招股说明书/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
 FINPATH = './tmp/风险段落统计.xlsx'  # 统计Excel生成位置
 GENPATH = './tmp/风险段落/'  # Word生成位置
@@ -155,13 +155,19 @@ def words_count(dat):
     # 需要控制输出行数时 改这里 改成 return result.head(xx) xx为需要保留的行数
 
 
-# 情感分数计算 当前词语出现i次 词语总数为j个
-def emotion_calc(i, j):
-    w = 0
-    if i > 0 and j > 0:
-        w = 1 + math.log(j/i)
-    point = 1 / (1 + math.log(i)) * w
-    return point
+# 情感分数计算 文档i个词 当前词语在该文档中出现j次
+def emotion_calc(i, j, wj):
+    if j > 0 and wj > 0:
+        wij = 1 + math.log(j) * wj
+        # print(wij)
+    else:
+        wij = 0
+    return wij
+
+
+# 数字保留两位小数
+def num_fmt(x):
+    return int(x*100)/100
 
 
 # 进行字数统计，并输出到表格中
@@ -170,16 +176,18 @@ def generate_xlsx(src_dict):
     neg_dict_lst = get_dict_lst_from_file(neg_dict)
     rows = list()
     crows = list()
-    emorows = list()
+    emo_rows = list()
     failed_rows = list()
+    ss_lst = list()
+    word_in_doc_count = {}
+    weight_of_word_in_all_doc = {}
+    success_doc_num = 0
     for dt in src_dict:
         file_name = dt['name']
         row = list()
         crow = list()
-        emorow = list()
         row.append(file_name)
         crow.append(file_name)
-        emorow.append(file_name)
         print(file_name)
 
         all_num = word_count(dt['text'])
@@ -259,33 +267,21 @@ def generate_xlsx(src_dict):
         if sumnum/all_num > 0.8 or warning_num[1] == 0 or warning_num[2] == 0:
             failed_rows.append(row)
         else:
+            success_doc_num += 1
             rows.append(row)
             crows.append(crow)
-            # 计算情感分数
+            # 统计情感分数
             ss = ''
             s = ['', '', '']
             for i in range(3):
                 s[i] = ' '.join(paras_to_word[i])
             ss = s[0] + s[1] + s[2]
-            pp_pos = pp_neg = 0
+            ss_lst.append(ss)
             cc = Counter(jieba.cut(ss))
             for wd in cc:
-                if wd in pos_dict_lst:
-                    pp_pos += emotion_calc(cc[wd], crow[5])
-                if wd in neg_dict_lst:
-                    pp_neg += emotion_calc(cc[wd], crow[5])
-            emorow.extend([int(pp_pos*100)/100, int(pp_neg*100)/100])
-            print(pp_pos, pp_neg)
-            for i in range(3):
-                p_pos = p_neg = 0
-                c = Counter(jieba.cut(s[i]))
-                for wd in c:
-                    if wd in pos_dict_lst:
-                        p_pos += emotion_calc(c[wd], crow[i+2])
-                    if wd in neg_dict_lst:
-                        p_neg += emotion_calc(c[wd], crow[i+2])
-                emorow.extend([int(p_pos*100)/100, int(p_neg*100)/100])
-            emorows.append(emorow)
+                if cc[wd] > 0:
+                    cnt = word_in_doc_count.setdefault(wd, 0)
+                    word_in_doc_count[wd] = cnt + 1
             # 生成.docx
             for paras in paras_to_word:
                 for para in paras:
@@ -293,6 +289,43 @@ def generate_xlsx(src_dict):
                         document.add_paragraph(para)
             document.save(GENPATH+file_name)
         print()
+
+    for wd in word_in_doc_count:
+        weight_of_word_in_all_doc[wd] = math.log(success_doc_num/word_in_doc_count[wd])
+    # print(word_in_doc_count)
+    # print(weight_of_word_in_all_doc)
+    for num, ss in enumerate(ss_lst):
+        cc = Counter(jieba.cut(ss))
+        weight_pos = 0
+        weight_neg = 0
+        for wd in cc:
+            if wd in pos_dict_lst:
+                weight_pos += emotion_calc(crows[num][5], cc[wd], weight_of_word_in_all_doc.setdefault(wd, 0))
+            if wd in neg_dict_lst:
+                weight_neg += emotion_calc(crows[num][5], cc[wd], weight_of_word_in_all_doc.setdefault(wd, 0))
+        weight_pos = 1/(1+math.log(crows[num][5]))*weight_pos
+        weight_neg = 1/(1+math.log(crows[num][5]))*weight_neg
+        emo_row = [crows[num][0], num_fmt(weight_pos), num_fmt(weight_neg)]
+        emo_rows.append(emo_row)
+    print(emo_rows)
+
+    # for wd in cc:
+    #     if wd in pos_dict_lst:
+    #         pp_pos += emotion_calc(cc[wd], crow[5])
+    #     if wd in neg_dict_lst:
+    #         pp_neg += emotion_calc(cc[wd], crow[5])
+    # emorow.extend([int(pp_pos*100)/100, int(pp_neg*100)/100])
+    # print(pp_pos, pp_neg)
+    # for i in range(3):
+    #     p_pos = p_neg = 0
+    #     c = Counter(jieba.cut(s[i]))
+    #     for wd in c:
+    #         if wd in pos_dict_lst:
+    #             p_pos += emotion_calc(c[wd], crow[i+2])
+    #         if wd in neg_dict_lst:
+    #             p_neg += emotion_calc(c[wd], crow[i+2])
+    #     emorow.extend([int(p_pos*100)/100, int(p_neg*100)/100])
+    # emorows.append(emorow)
 
     # 创建Excel文档
     wb = Workbook()
@@ -316,8 +349,8 @@ def generate_xlsx(src_dict):
                    '重大事项提示-风险积极分数', '重大事项提示-风险消极分数',
                    '风险因素积极分数', '风险因素消极分数',
                    '管理层讨论与分析-未来盈利能力积极分数', '管理层讨论与分析-未来盈利能力消极分数'])
-    for emorow in emorows:
-        sheet3.append(emorow)
+    for emo_row in emo_rows:
+        sheet3.append(emo_row)
     # 操作工作表4 处理失败文档 数字为对应的字数统计结果
     wb.create_sheet('处理失败文档', index=3)
     sheet4 = wb['处理失败文档']
