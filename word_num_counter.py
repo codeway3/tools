@@ -159,7 +159,6 @@ def words_count(dat):
 def emotion_calc(i, j, wj):
     if j > 0 and wj > 0:
         wij = 1 + math.log(j) * wj
-        # print(wij)
     else:
         wij = 0
     return wij
@@ -327,6 +326,8 @@ def generate_xlsx(src_dict):
                     weight_pos += emotion_calc(crows[num][i+2], cc[wd], weight_of_word_in_paras[i].setdefault(wd, 0))
                 if wd in neg_dict_lst:
                     weight_neg += emotion_calc(crows[num][i+2], cc[wd], weight_of_word_in_paras[i].setdefault(wd, 0))
+            weight_neg = 1/(1+math.log(crows[num][i+2]))*weight_neg
+            weight_pos = 1/(1+math.log(crows[num][i+2]))*weight_pos
             emo_row.append(num_fmt(weight_pos))
             emo_row.append(num_fmt(weight_neg))
         emo_rows.append(emo_row)
