@@ -27,7 +27,7 @@ import jieba.analyse as ana
 import pandas as pd
 
 
-SOURCEPATH = './tmp/招股说明书/'  # 文档目录
+SOURCEPATH = './tmp/招股说明书17/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
 FINPATH = './tmp/风险段落统计.xlsx'  # 统计Excel生成位置
 GENPATH = './tmp/风险段落/'  # Word生成位置
@@ -178,8 +178,11 @@ def generate_xlsx(src_dict):
     crows = list()
     emo_rows = list()
     failed_rows = list()
+    s_lst = list()
     ss_lst = list()
+    word_in_paras_count = [{}, {}, {}]
     word_in_doc_count = {}
+    weight_of_word_in_paras = [{}, {}, {}]
     weight_of_word_in_all_doc = {}
     success_doc_num = 0
     for dt in src_dict:
@@ -275,7 +278,13 @@ def generate_xlsx(src_dict):
             s = ['', '', '']
             for i in range(3):
                 s[i] = ' '.join(paras_to_word[i])
+                c = Counter(jieba.cut(s[i]))
+                for wd in c:
+                    if c[wd] > 0:
+                        cnt = word_in_paras_count[i].setdefault(wd, 0)
+                        word_in_paras_count[i][wd] = cnt + 1
             ss = s[0] + s[1] + s[2]
+            s_lst.append(s)
             ss_lst.append(ss)
             cc = Counter(jieba.cut(ss))
             for wd in cc:
@@ -290,6 +299,9 @@ def generate_xlsx(src_dict):
             document.save(GENPATH+file_name)
         print()
 
+    for i in range(3):
+        for wd in word_in_paras_count[i]:
+            weight_of_word_in_paras[i][wd] = math.log(success_doc_num/word_in_paras_count[i][wd])
     for wd in word_in_doc_count:
         weight_of_word_in_all_doc[wd] = math.log(success_doc_num/word_in_doc_count[wd])
     # print(word_in_doc_count)
@@ -306,26 +318,19 @@ def generate_xlsx(src_dict):
         weight_pos = 1/(1+math.log(crows[num][5]))*weight_pos
         weight_neg = 1/(1+math.log(crows[num][5]))*weight_neg
         emo_row = [crows[num][0], num_fmt(weight_pos), num_fmt(weight_neg)]
+        for i in range(3):
+            weight_pos = 0
+            weight_neg = 0
+            cc = Counter(jieba.cut(s_lst[num][i]))
+            for wd in cc:
+                if wd in pos_dict_lst:
+                    weight_pos += emotion_calc(crows[num][i+2], cc[wd], weight_of_word_in_paras[i].setdefault(wd, 0))
+                if wd in neg_dict_lst:
+                    weight_neg += emotion_calc(crows[num][i+2], cc[wd], weight_of_word_in_paras[i].setdefault(wd, 0))
+            emo_row.append(num_fmt(weight_pos))
+            emo_row.append(num_fmt(weight_neg))
         emo_rows.append(emo_row)
     print(emo_rows)
-
-    # for wd in cc:
-    #     if wd in pos_dict_lst:
-    #         pp_pos += emotion_calc(cc[wd], crow[5])
-    #     if wd in neg_dict_lst:
-    #         pp_neg += emotion_calc(cc[wd], crow[5])
-    # emorow.extend([int(pp_pos*100)/100, int(pp_neg*100)/100])
-    # print(pp_pos, pp_neg)
-    # for i in range(3):
-    #     p_pos = p_neg = 0
-    #     c = Counter(jieba.cut(s[i]))
-    #     for wd in c:
-    #         if wd in pos_dict_lst:
-    #             p_pos += emotion_calc(c[wd], crow[i+2])
-    #         if wd in neg_dict_lst:
-    #             p_neg += emotion_calc(c[wd], crow[i+2])
-    #     emorow.extend([int(p_pos*100)/100, int(p_neg*100)/100])
-    # emorows.append(emorow)
 
     # 创建Excel文档
     wb = Workbook()
