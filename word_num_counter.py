@@ -27,7 +27,7 @@ import jieba.analyse as ana
 import pandas as pd
 
 
-SOURCEPATH = './tmp/招股说明书17/'  # 文档目录
+SOURCEPATH = './tmp/招股说明书130/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
 FINPATH = './tmp/风险段落统计.xlsx'  # 统计Excel生成位置
 GENPATH = './tmp/风险段落/'  # Word生成位置
@@ -326,8 +326,9 @@ def generate_xlsx(src_dict):
                     weight_pos += emotion_calc(crows[num][i+2], cc[wd], weight_of_word_in_paras[i].setdefault(wd, 0))
                 if wd in neg_dict_lst:
                     weight_neg += emotion_calc(crows[num][i+2], cc[wd], weight_of_word_in_paras[i].setdefault(wd, 0))
-            weight_neg = 1/(1+math.log(crows[num][i+2]))*weight_neg
-            weight_pos = 1/(1+math.log(crows[num][i+2]))*weight_pos
+            if crows[num][i+2] > 0:
+                weight_neg = 1/(1+math.log(crows[num][i+2]))*weight_neg
+                weight_pos = 1/(1+math.log(crows[num][i+2]))*weight_pos
             emo_row.append(num_fmt(weight_pos))
             emo_row.append(num_fmt(weight_neg))
         emo_rows.append(emo_row)
