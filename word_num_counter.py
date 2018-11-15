@@ -179,9 +179,12 @@ def generate_xlsx(src_dict):
     failed_rows = list()
     s_lst = list()
     ss_lst = list()
+    doc_lst = list()
     word_in_paras_count = [{}, {}, {}]
+    word_in_danger_doc_count = {}
     word_in_doc_count = {}
     weight_of_word_in_paras = [{}, {}, {}]
+    weight_of_word_in_all_danger_doc = {}
     weight_of_word_in_all_doc = {}
     success_doc_num = 0
     for dt in src_dict:
@@ -283,9 +286,16 @@ def generate_xlsx(src_dict):
                         cnt = word_in_paras_count[i].setdefault(wd, 0)
                         word_in_paras_count[i][wd] = cnt + 1
             ss = s[0] + s[1] + s[2]
+            sss = ''.join(dt['text'])
             s_lst.append(s)
             ss_lst.append(ss)
+            doc_lst.append(sss)
             cc = Counter(jieba.cut(ss))
+            for wd in cc:
+                if cc[wd] > 0:
+                    cnt = word_in_danger_doc_count.setdefault(wd, 0)
+                    word_in_danger_doc_count[wd] = cnt + 1
+            cc = Counter(jieba.cut(sss))
             for wd in cc:
                 if cc[wd] > 0:
                     cnt = word_in_doc_count.setdefault(wd, 0)
@@ -301,22 +311,34 @@ def generate_xlsx(src_dict):
     for i in range(3):
         for wd in word_in_paras_count[i]:
             weight_of_word_in_paras[i][wd] = math.log(success_doc_num/word_in_paras_count[i][wd])
+    for wd in word_in_danger_doc_count:
+        weight_of_word_in_all_danger_doc[wd] = math.log(success_doc_num/word_in_danger_doc_count[wd])
     for wd in word_in_doc_count:
         weight_of_word_in_all_doc[wd] = math.log(success_doc_num/word_in_doc_count[wd])
-    # print(word_in_doc_count)
-    # print(weight_of_word_in_all_doc)
     for num, ss in enumerate(ss_lst):
+        cc = Counter(jieba.cut(doc_lst[num]))
+        weight_pos = 0
+        weight_neg = 0
+        for wd in cc:
+            if wd in pos_dict_lst:
+                weight_pos += emotion_calc(crows[num][1], cc[wd], weight_of_word_in_all_doc.setdefault(wd, 0))
+            if wd in neg_dict_lst:
+                weight_neg += emotion_calc(crows[num][1], cc[wd], weight_of_word_in_all_doc.setdefault(wd, 0))
+        weight_pos = 1/(1+math.log(crows[num][1]))*weight_pos
+        weight_neg = 1/(1+math.log(crows[num][1]))*weight_neg
+        emo_row = [crows[num][0], num_fmt(weight_pos), num_fmt(weight_neg)]
         cc = Counter(jieba.cut(ss))
         weight_pos = 0
         weight_neg = 0
         for wd in cc:
             if wd in pos_dict_lst:
-                weight_pos += emotion_calc(crows[num][5], cc[wd], weight_of_word_in_all_doc.setdefault(wd, 0))
+                weight_pos += emotion_calc(crows[num][5], cc[wd], weight_of_word_in_all_danger_doc.setdefault(wd, 0))
             if wd in neg_dict_lst:
-                weight_neg += emotion_calc(crows[num][5], cc[wd], weight_of_word_in_all_doc.setdefault(wd, 0))
+                weight_neg += emotion_calc(crows[num][5], cc[wd], weight_of_word_in_all_danger_doc.setdefault(wd, 0))
         weight_pos = 1/(1+math.log(crows[num][5]))*weight_pos
         weight_neg = 1/(1+math.log(crows[num][5]))*weight_neg
-        emo_row = [crows[num][0], num_fmt(weight_pos), num_fmt(weight_neg)]
+        emo_row.append(num_fmt(weight_pos))
+        emo_row.append(num_fmt(weight_neg))
         for i in range(3):
             weight_pos = 0
             weight_neg = 0
@@ -353,6 +375,7 @@ def generate_xlsx(src_dict):
     sheet3 = wb['文档情感打分']
     sheet3.append(['文档名字',
                    '总体积极分数', '总体消极分数',
+                   '总体风险段落积极分数', '总体风险段落消极分数',
                    '重大事项提示-风险积极分数', '重大事项提示-风险消极分数',
                    '风险因素积极分数', '风险因素消极分数',
                    '管理层讨论与分析-未来盈利能力积极分数', '管理层讨论与分析-未来盈利能力消极分数'])
