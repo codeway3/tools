@@ -41,6 +41,7 @@ pos_dict = './tmp/pos_dic111.txt'
 neg_dict = './tmp/neg_dic111.txt'
 jieba.load_userdict(pos_dict)
 jieba.load_userdict(neg_dict)
+NUM_K = 10
 DEBUG = False
 DCT = dict()
 
@@ -223,7 +224,7 @@ def generate_xlsx(src_dict):
         paras_to_word = [[], [], []]
 
         global DCT
-        DCT = dict()
+        # DCT = dict()
         document = Document()
         for para_text in dt['text']:
             para_text = ''.join(para_text.split())
@@ -292,8 +293,9 @@ def generate_xlsx(src_dict):
                 if DEBUG:
                     print(para_text)
         # print(DCT)
-        print(select_top_K(DCT, pos_dict_lst, 10))
-        print(select_top_K(DCT, neg_dict_lst, 10))
+        # 输出每个文本出现频率最高的前k个积极消极词汇
+        # print(select_top_K(DCT, pos_dict_lst, 10))
+        # print(select_top_K(DCT, neg_dict_lst, 10))
         row.extend(warning_num)
         row.append(sum(warning_num))
         words_sum = sum(words_num)
@@ -385,6 +387,10 @@ def generate_xlsx(src_dict):
             emo_row.append(num_fmt(weight_neg))
         emo_rows.append(emo_row)
     print(emo_rows)
+    print()
+    # 输出全部文本的出现频率前k个积极与消极词汇
+    print(select_top_K(DCT, pos_dict_lst, NUM_K))
+    print(select_top_K(DCT, neg_dict_lst, NUM_K))
 
     # 创建Excel文档
     wb = Workbook()
