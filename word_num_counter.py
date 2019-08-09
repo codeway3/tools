@@ -27,7 +27,7 @@ import jieba.analyse as ana
 import pandas as pd
 
 
-SOURCEPATH = './tmp/招股说明书130/'  # 文档目录
+SOURCEPATH = './tmp/招股说明书/'  # 文档目录
 MIDDLEPATH = './tmp/storage.pickle'  # 临时存储位置（可忽略
 FINPATH = './tmp/风险段落统计.xlsx'  # 统计Excel生成位置
 GENPATH = './tmp/风险段落/'  # Word生成位置
@@ -41,6 +41,8 @@ pos_dict = './tmp/pos_dic111.txt'
 neg_dict = './tmp/neg_dic111.txt'
 jieba.load_userdict(pos_dict)
 jieba.load_userdict(neg_dict)
+DEBUG = False
+DCT = dict()
 
 # 匹配用的模式串
 pattern1_1_in = re.compile(r'^.*重大事项提示.*$')
@@ -150,9 +152,22 @@ def words_count(dat):
         df_list.append(df)
     ans = pd.concat(df_list)
     result = ans.shape[0]
-    # result = ans.groupby('word').size().sort_values(ascending=False)
+    global DCT
+    x = DCT
+    y = ans.groupby('word').size().sort_values(ascending=False).to_dict()
+    z = dict(Counter(x) + Counter(y))
+    DCT = z
     return result
     # 需要控制输出行数时 改这里 改成 return result.head(xx) xx为需要保留的行数
+
+
+def select_top_K(dct, filter, k):
+    d = dict()
+    for x, y in dct.items():
+        if x in filter:
+            d[x] = y
+    sorted_lst = sorted(d.items(), key=lambda item: item[1], reverse=True)
+    return sorted_lst[:k]
 
 
 # 情感分数计算 文档i个词 当前词语在该文档中出现j次
@@ -207,26 +222,33 @@ def generate_xlsx(src_dict):
         flag = [False, False, False]
         paras_to_word = [[], [], []]
 
+        global DCT
+        DCT = dict()
         document = Document()
         for para_text in dt['text']:
             para_text = ''.join(para_text.split())
             if re.match(pattern1_1_out, para_text) and flag1:
                 flag1 = False
                 flag[0] = False
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern3_1_out, para_text) and flag3:
                 flag3 = False
                 flag[2] = False
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern1_2_out, para_text) and flag1 and flag[0]:
                 flag[0] = False
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern2_out, para_text) and flag[1]:
                 flag[1] = False
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern3_2_out, para_text) and flag3 and flag[2]:
                 flag[2] = False
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
 
             if flag[0]:
                 warning_num[0] += word_count(para_text)
@@ -250,20 +272,28 @@ def generate_xlsx(src_dict):
 
             if re.match(pattern1_2_in, para_text) and flag1:
                 flag[0] = True
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern2_in, para_text):
                 flag1 = False
                 flag[1] = True
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern3_2_in, para_text) and flag3:
                 flag[2] = True
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern1_1_in, para_text):
                 flag1 = True
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
             elif re.match(pattern3_1_in, para_text):
                 flag3 = True
-                print(para_text)
+                if DEBUG:
+                    print(para_text)
+        # print(DCT)
+        print(select_top_K(DCT, pos_dict_lst, 10))
+        print(select_top_K(DCT, neg_dict_lst, 10))
         row.extend(warning_num)
         row.append(sum(warning_num))
         words_sum = sum(words_num)
